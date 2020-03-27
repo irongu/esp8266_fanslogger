@@ -2,6 +2,8 @@
 
 nodemcu，ST7789 TFT display 135*240
 
+can also work without display, read from serial com port
+
 ### pin connect
 
 | TFT display | nodemcu |
