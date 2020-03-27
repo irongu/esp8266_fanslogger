@@ -29,11 +29,8 @@ D8 = GPIO15
 D9 = GPIO3
 D10 = GPIO1
  */
-//SDA - D2
-//SCL - D1
-//VCC - 3V
-//GND - G
-//本代码禁止商用，若有商用，法律追究.
+
+
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <ESP8266HTTPClient.h>
@@ -46,9 +43,10 @@ D10 = GPIO1
 
 DS3231M_Class DS3231M;
 unsigned int localPort = 2390;  
-const char* ssid = "irongu";  //bazhegaile
-const char* password = "172.16.3.199";
-String uid = "326251695";//546195 326251695
+
+const char* ssid = "";  //wifi ssid
+const char* password = "";//wifi password
+String uid = "";//bilibili user id
 
 DynamicJsonDocument jsonBuffer(400);
 WiFiClient client;
@@ -303,7 +301,7 @@ void showTime(){
     //Serial.print(':');
     
     //Serial.println((epoch  % 3600) / 60);
-    epoch=epoch+8*60*60;
+    epoch=epoch+8*60*60;//time zone +8
     Serial.print(year(epoch));
     Serial.print("-");
     Serial.print(month(epoch));
