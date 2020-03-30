@@ -8,9 +8,9 @@
 #include <Adafruit_ST77xx.h>
 #include <SPI.h>
 
-#define TFT_CS         4
+#define TFT_CS         2
 #define TFT_RST        16                                            
-#define TFT_DC         5
+#define TFT_DC         0
 #define TFT_MOSI 13  // Data out
 #define TFT_SCLK 14  // Clock out
 Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
@@ -29,8 +29,11 @@ D8 = GPIO15
 D9 = GPIO3
 D10 = GPIO1
  */
-
-
+//SDA - D2 4
+//SCL - D1 5
+//VCC - 3V
+//GND - G
+//本代码禁止商用，若有商用，法律追究.
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <ESP8266HTTPClient.h>
@@ -43,10 +46,9 @@ D10 = GPIO1
 
 DS3231M_Class DS3231M;
 unsigned int localPort = 2390;  
-
-const char* ssid = "";  //wifi ssid
-const char* password = "";//wifi password
-String uid = "";//bilibili user id
+const char* ssid = "";  
+const char* password = "";
+String uid = ""; 
 
 DynamicJsonDocument jsonBuffer(400);
 WiFiClient client;
@@ -68,6 +70,7 @@ long start_likes=0;
 unsigned char change=0;
 long added=0;
 unsigned char firstrun=0;
+unsigned char lastmin;
 
 WiFiUDP udp;
 void setup() 
@@ -80,11 +83,13 @@ void setup()
   tft.fillScreen(ST77XX_BLACK);
   tft.setTextColor(ST77XX_WHITE,ST77XX_BLACK);
   tft.setTextSize(1);
- /* while (!DS3231M.begin()) // Initialize RTC communications
+  while (!DS3231M.begin()) // Initialize RTC communications
   { 
     Serial.println("Unable to find DS3231M. Checking again in 1 second.");
     delay(1000);
-  }*/
+  }
+  DateTime now = DS3231M.now();
+  lastmin = now.minute();
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid,password);//获取名称密码
   tft.setCursor(0,0);
@@ -120,6 +125,7 @@ void setup()
 
 void loop() 
 {  
+  if(lastmin>40)lastmin=lastmin-15;
   if(WiFi.status() == WL_CONNECTED)
   {
     HTTPClient http;
@@ -253,7 +259,7 @@ void loop()
       if(firstrun==0)
       {
         tft.println("From Time:");
-        showTime();
+        nowtime();
         for(char i=0;i<18;i++)tft.print("-");
         tft.println("");
       }
@@ -266,7 +272,7 @@ void loop()
           for(char i=0;i<18;i++)tft.print("-");
           tft.println("");
         }
-        showTime();
+        nowtime();
         for(char i=0;i<18;i++)Serial.print("-");
         Serial.println("");
         change=0;
@@ -274,75 +280,48 @@ void loop()
       } 
       tft.setCursor(0,0);
       for(char i=0;i<5;i++)tft.println("");     
+      DateTime now = DS3231M.now();
+
+      if(lastmin==now.minute()-10)
+      {
+        correctTime();
+        lastmin=now.minute();
+      }
       delay(10000);
-      //delay(10000);     
+      delay(5000);     
     } 
   }
 }
 
-void showTime(){
+void correctTime()
+{
+  Serial.println("NTP Time correction start");
   WiFi.hostByName(ntpServerName, timeServerIP); 
   sendNTPpacket(timeServerIP);
   delay(1000);
   int cb = udp.parsePacket();
-  if (!cb) {
+  if (!cb) 
+  {
     Serial.println("no packet yet");
-    tft.print("no packet yet");
-    tail_cover();
   }
-  else {
+  else 
+  {
     udp.read(packetBuffer, NTP_PACKET_SIZE);
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
     unsigned long secsSince1900 = highWord << 16 | lowWord;
     const unsigned long seventyYears = 2208988800UL;
     unsigned long epoch = secsSince1900 - seventyYears;
-    //Serial.print(((epoch  % 86400L) / 3600)+8);
-    //Serial.print(':');
-    
-    //Serial.println((epoch  % 3600) / 60);
-    epoch=epoch+8*60*60;//time zone +8
-    Serial.print(year(epoch));
-    Serial.print("-");
-    Serial.print(month(epoch));
-    Serial.print("-");
-    Serial.print(day(epoch));
-    Serial.print(" ");
-    Serial.print(hour(epoch));
-    Serial.print(F(":"));
-    if (minute(epoch) < 10 ) {
-      Serial.print('0');
-    }
-    Serial.print(minute(epoch));
-    Serial.print(F(":"));
-    if ( second(epoch) < 10 ) {
-      Serial.print('0');
-    }
-    Serial.print(second(epoch));
-    Serial.println(F(" "));
 
-    tft.print(year(epoch));
-    tft.print("-");
-    tft.print(month(epoch));
-    tft.print("-");
-    tft.print(day(epoch));
-    tft.print(" ");
-    tft.print(hour(epoch));
-    tft.print(F(":"));
-    if (minute(epoch) < 10 ) {
-      tft.print('0');
-    }
-    tft.print(minute(epoch));
-    tft.print(F(":"));
-    if ( second(epoch) < 10 ) {
-      tft.print('0');
-    }
-    tft.print(second(epoch));
-    tft.println(F(" "));
+    epoch=epoch+8*60*60;
+    
+    DS3231M.adjust(DateTime(year(epoch),month(epoch),day(epoch),hour(epoch),minute(epoch),second(epoch)));    
+    Serial.println("NTP Time correction complete");
   }
 }
 
-void sendNTPpacket(IPAddress& address){
+void sendNTPpacket(IPAddress& address)
+{
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
   packetBuffer[0] = 0b11100011;
   packetBuffer[1] = 0;
@@ -357,6 +336,51 @@ void sendNTPpacket(IPAddress& address){
   udp.endPacket();
 }
 
+void nowtime()
+{
+  DateTime now = DS3231M.now(); // get the date and time from RTC
+  Serial.print(now.year());
+  Serial.print("-");
+  Serial.print(now.month());
+  Serial.print("-");
+  Serial.print(now.day());
+  Serial.print(" ");
+  Serial.print(now.hour());
+  Serial.print(F(":"));
+  if (now.minute() < 10 ) 
+  {
+    Serial.print('0');
+  }
+  Serial.print(now.minute());
+  Serial.print(F(":"));
+  if (now.second() < 10 ) 
+  {
+    Serial.print('0');
+  }
+  Serial.print(now.second());
+  Serial.println(F(" "));
+    
+  tft.print(now.year());
+  tft.print("-");
+  tft.print(now.month());
+  tft.print("-");
+  tft.print(now.day());
+  tft.print(" ");
+  tft.print(now.hour());
+  tft.print(F(":"));
+  if (now.minute() < 10 ) 
+  {
+    tft.print('0');
+  }
+  tft.print(now.minute());
+  tft.print(F(":"));
+  if (now.second() < 10 ) 
+  {
+    tft.print('0');
+  }
+  tft.print(now.second());
+  tft.println(F(" "));
+}
 void tail_cover()
 {
   for(char i=0;i<10;i++)tft.print(" ");
